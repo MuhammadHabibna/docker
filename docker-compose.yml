@@ -1,0 +1,122 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_container
+    ports:
+      - "8080:80" # Akses nginx di host melalui port 8080
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    volumes:
+      # - ./nginx.conf:/etc/nginx/nginx.conf:ro # Mount file konfigurasi nginx
+      - ./html:/usr/share/nginx/html # Mount folder untuk file HTML
+    depends_on:
+      - mysql # Nginx akan menunggu MySQL aktif
+    networks:
+      - app_network
+
+  mysql:
+    image: mysql:8.0-oracle
+    container_name: mysql_container
+    ports:
+      - "3306:3306" # Akses MySQL di host melalui port 3306
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: userdb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    volumes:
+      - db_data:/var/lib/mysql # Persistensi data MySQL
+    networks:
+      - app_network
+
+  # Service untuk web kedua
+  nginx_admin:
+    image: nginx:alpine
+    container_name: nginx_admin_container
+    ports:
+      - "8081:80" # Akses nginx web kedua melalui port 8081
+    configs:
+      - source: nginx_admin_config
+        target: /etc/nginx/nginx.conf
+    volumes:
+      # - ./nginx_admin.conf:/etc/nginx/nginx.conf:ro # Konfigurasi nginx untuk web kedua
+      - ./html_admin:/usr/share/nginx/html # Folder untuk file HTML web kedua
+    depends_on:
+      - mysql_admin
+    networks:
+      - app_network
+
+  mysql_admin:
+    image: mysql:8.0-oracle
+    container_name: mysql_admin_container
+    ports:
+      - "3307:3306" # Akses MySQL kedua di host melalui port 3307
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: admindb
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: adminpassword
+    volumes:
+      - db_data_admin:/var/lib/mysql # Persistensi data MySQL kedua
+    networks:
+      - app_network
+
+  # Service Redis (untuk caching)
+  redis:
+    image: redis:latest
+    container_name: redis_container
+    ports:
+      - "6379:6379" # Akses Redis melalui port 6379
+    networks:
+      - app_network
+
+   # Service PHPMyAdmin (untuk manajemen database)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: phpmyadmin_container
+    ports:
+      - "8082:80" # Akses PHPMyAdmin di host melalui port 8082
+    environment:
+      PMA_HOST: mysql_container # Host MySQL utama
+      PMA_PORT: 3306
+    depends_on:
+      - mysql
+    networks:
+      - app_network
+
+   # Service API (contoh backend untuk API sederhana)
+  api_service:
+    image: node:latest
+    container_name: api_service_container
+    ports:
+      - "3000:3000" # Akses API melalui port 3000
+    volumes:
+      - ./api:/usr/src/app # Folder untuk kode API
+    working_dir: /usr/src/app
+    command: ["npm", "start"]
+    networks:
+      - app_network
+  
+  # Service tambahan untuk load testing
+  load_tester:
+    image: alpine:latest
+    container_name: load_tester_container
+    command: ["sh", "-c", "echo 'Load testing service running'; sleep 3600"]
+    networks:
+      - app_network
+
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  db_data:
+  db_data_admin:
+
+configs:
+  nginx_config:
+    file: ./nginx.conf
+  nginx_admin_config:
+    file: ./nginx_admin.conf
